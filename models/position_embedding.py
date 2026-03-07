@@ -1,6 +1,3 @@
-'''
-This implementation is from Attention is all you need paper
-'''
 import torch
 import torch.nn as nn
 import math

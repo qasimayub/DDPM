@@ -49,7 +49,7 @@ def periodic_sample_grids(model, diff, count, device, grid=3):
 def ancestral_sample(model, diff, count, device):
     model.eval()
     xi = torch.randn((count, 1, 28, 28), device=device)
-
+    L = diff.L
     norms = []
     intermediates = {}
     save_points = {L-1, 3*L//4, L//4, L//8, L//16, 0}
@@ -144,3 +144,47 @@ def check_noise_correlation(model, diff, x0):
         correlation = torch.corrcoef(torch.stack([eps.flatten(), eps_hat.flatten()]))[0, 1]
     model.train()
     return correlation.item()
+
+def strided_ancestral_sample(model, diff, count, device, stride=1):
+    model.eval()
+    xi = torch.randn((count, 1, 28, 28), device=device)
+    timesteps = list(range(diff.L - 1, -1, -stride))
+    with torch.no_grad():
+        for idx in timesteps:
+            t_tensor = torch.full((count,), idx, device=device, dtype=torch.long)
+            eps_hat = model(xi, t_tensor)
+            xi = diff.p_sample_step(xi, t_tensor, eps_hat)
+    model.train()
+    return xi
+
+def ddim_sample_step(diff, xi, t_tensor, t_prev_tensor, eps_hat):
+    alpha_bar_t = diff.extract(diff.alphas_cumprod, t_tensor, xi.shape)
+    valid_mask = (t_prev_tensor >= 0).view(-1, 1, 1, 1)
+    alpha_bar_t_prev = torch.where(
+        valid_mask,
+        diff.extract(diff.alphas_cumprod, t_prev_tensor.clamp(min=0), xi.shape),
+        torch.ones_like(alpha_bar_t)
+    )
+    pred_x0 = (xi - torch.sqrt(1.0 - alpha_bar_t) * eps_hat) / torch.sqrt(alpha_bar_t)
+    dir_xt = torch.sqrt(1.0 - alpha_bar_t_prev) * eps_hat
+    
+    # sqrt(alpha_bar_t_prev) * x0 + sqrt(1-alpha_bar_t_prev) * eps_hat
+    # we ignore sigma term to make it deterministic
+    x_prev = torch.sqrt(alpha_bar_t_prev) * pred_x0 + dir_xt
+    return x_prev
+
+def strided_ddim_sample(model, diff, count, device, stride=1):
+    model.eval()
+    xi = torch.randn((count, 1, 28, 28), device=device)
+    timesteps = list(range(diff.L - 1, -1, -stride))
+    with torch.no_grad():
+        for i, idx in enumerate(timesteps):
+            t_tensor = torch.full((count,), idx, device=device, dtype=torch.long)
+            if i < len(timesteps) - 1:
+                idx_prev = timesteps[i + 1]
+            else:
+                idx_prev = -1
+            t_prev_tensor = torch.full((count,), idx_prev, device=device, dtype=torch.long)
+            eps_hat = model(xi, t_tensor)
+            xi = ddim_sample_step(diff, xi, t_tensor, t_prev_tensor, eps_hat)
+    return xi
