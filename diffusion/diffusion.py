@@ -16,7 +16,7 @@ class DiffusionProcess:
         self.sqrt_recip_alphas = torch.sqrt(1.0 / self.alphas).to(device)
 
         # beta_tilde_i = (1 - alpha_bar_{i-1}) / (1 - alpha_bar_i) * beta_i
-        alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0).to(device) # pad with a 0 at the start because for i=0, there is no i-1.
+        alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0).to(device) # pad with a 1.0 at the start because for i=0, there is no i-1.
 
         self.posterior_variance = self.betas * (1.0 - alphas_cumprod_prev) / (1.0 - self.alphas_cumprod).to(device)
 
