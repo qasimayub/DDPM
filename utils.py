@@ -27,7 +27,7 @@ def make_beta_schedule(L, type='linear', beta_min=1e-4, beta_max=0.02):
     else:
         return torch.linspace(beta_min**0.5, beta_max**0.5, L) ** 2
 
-def periodic_sample_grids(model, count, device, grid=3):
+def periodic_sample_grids(model, diff, count, device, grid=3):
     model.eval()
     model.to(device)
     with torch.no_grad():
@@ -108,3 +108,39 @@ def plot_sampling_norms(norms, L):
     plt.legend()
     plt.tight_layout()
     plt.show()
+
+def check_posterior_logic(diff, loader, device, i_val=100):
+    x0, _ = next(iter(loader))
+    x0 = x0.to(device)
+    batch_size = x0.shape[0]
+    
+    i = torch.full((batch_size,), i_val, device=device, dtype=torch.long)
+    eps = torch.randn_like(x0)
+    xi = diff.q_sample(x0, i, eps)
+
+    mu_tilde, var_tilde = diff.q_posterior_mean_var(x0, xi, i)
+    xi_minus_1 = mu_tilde + torch.sqrt(var_tilde) * torch.randn_like(xi)
+
+    dist_i = torch.mean((xi - x0)**2).item()
+    dist_prev = torch.mean((xi_minus_1 - x0)**2).item()
+    
+    print(f"Distance at i={i_val}: {dist_i:.4f}")
+    print(f"Distance at i-1: {dist_prev:.4f}")
+    return dist_prev < dist_i
+
+def verify_training_inputs(diff, batch_size=10000):
+    t = diff.sample_timesteps(batch_size).cpu().numpy()
+    plt.hist(t, bins=50)
+    plt.title("Timestep Distribution (Should be flat/Uniform)")
+    plt.show()
+
+def check_noise_correlation(model, diff, x0):
+    t = diff.sample_timesteps(x0.shape[0]).to(device)
+    model.eval()
+    with torch.no_grad():
+        eps = torch.randn_like(x0)
+        xi = diff.q_sample(x0, t, eps)
+        eps_hat = model(xi, t)
+        correlation = torch.corrcoef(torch.stack([eps.flatten(), eps_hat.flatten()]))[0, 1]
+    model.train()
+    return correlation.item()
