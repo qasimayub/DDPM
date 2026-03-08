@@ -1,0 +1,1 @@
+Implemented Denoising Diffusion Probabilistic Models (DDPM) from scratch. Performed ablation studies and extended the implementation to Denoising Diffusion Implicit Models (DDIM).
