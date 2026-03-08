@@ -30,14 +30,14 @@ class ResidualBlock(nn.Module):
         h = self.gn1(h)
         h = self.act1(h)
 
-        # 1. Project time embedding: [Batch, time_emb_dim] -> [Batch, out_channels]
+        # Project time embedding: [Batch, time_emb_dim] -> [Batch, out_channels]
         time_emb = self.time_mlp(t_emb)
         
-        # 2. Reshape so it can broadcast across the spatial dimensions (Height, Width)
+        # Reshape so it can broadcast across the spatial dimensions (Height, Width)
         # Turns [Batch, out_channels] into [Batch, out_channels, 1, 1]
         time_emb = time_emb.unsqueeze(-1).unsqueeze(-1)
         
-        # 3. Add the time embedding as a bias term to the intermediate activations
+        # Add the time embedding as a bias term to the intermediate activations
         h = h + time_emb 
 
         h = self.conv2(h)
